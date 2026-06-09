@@ -240,7 +240,7 @@ smart_run_one() {
   if echo "$elog" | grep -qiE 'No Errors Logged|not supported|Unavailable'; then
     err=""
   else
-    err="$(echo "$elog" | sed 's/[[:space:]]\+/ /g' | head -n 8)"
+    err="$(echo "$elog" | sed 's/[[:space:]]\+/ /g' | head -n 8 || true)"
   fi
 
   local reasons=()
@@ -340,7 +340,7 @@ zfs_run_one() {
     handle_subject "$key" "Zpool ${pool}" "" "" ""
   else
     local sig title message details
-    details="$(printf '%s\n' "$full_status" | sed -n '1,60p')"
+    details="$(printf '%s\n' "$full_status" | sed -n '1,60p' || true)"
     sig="$(printf '%s' "$status_x" | cksum | awk '{print $1}')"
     title="Zpool ${pool} unhealthy (${HOSTNAME_SHORT})"
     message="$(cat <<EOF
@@ -432,7 +432,7 @@ md_run_one() {
 
   if (( bad == 1 )); then
     local sig title message head
-    head="$(printf '%s\n' "$detail" | sed -n '1,40p')"
+    head="$(printf '%s\n' "$detail" | sed -n '1,40p' || true)"
     sig="$(printf '%s' "${state_line}|${failed}|${faulty}" | cksum | awk '{print $1}')"
     title="mdadm ${name} unhealthy (${HOSTNAME_SHORT})"
     message="$(cat <<EOF
