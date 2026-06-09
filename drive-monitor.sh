@@ -193,7 +193,10 @@ smart_scan_devices() {
     $1 ~ /^\/dev\// {
       dev=$1; dtype=""
       for (i=1;i<=NF;i++) if ($i=="-d" && (i+1)<=NF) dtype=$(i+1)
-      print dev "|" dtype
+      print "ok|" dev "|" dtype
+    }
+    /^#[[:space:]]*\/dev\// && /open failed/ {
+      for (i=1;i<=NF;i++) if ($i ~ /^\/dev\//) { print "failed|" $i "|"; break }
     }'
 }
 
@@ -240,7 +243,8 @@ smart_run_one() {
   if echo "$elog" | grep -qiE 'No Errors Logged|not supported|Unavailable'; then
     err=""
   else
-    err="$(echo "$elog" | sed 's/[[:space:]]\+/ /g' | head -n 8 || true)"
+    err="$(echo "$elog" | grep -A5 'Error [0-9]* occurred' | head -n 20 || true)"
+    [[ -z "$err" ]] && err="$(echo "$elog" | grep -iE 'error count|UNC|read failure' | head -n 8 || true)"
   fi
 
   local reasons=()
@@ -281,10 +285,21 @@ module_smart() {
   if ! have "$SMARTCTL"; then log "SMART module skipped (smartctl not found)."; return 0; fi
 
   local found=0
-  while IFS='|' read -r dev dtype; do
-    [[ -e "$dev" ]] || continue
-    found=1
-    smart_run_one "$dev" "$dtype"
+  while IFS='|' read -r status dev dtype; do
+    if [[ "$status" == "failed" ]]; then
+      found=1
+      local key; key="smart_$(sanitize_key "${dev}_open_failed")"
+      handle_subject "$key" "SMART ${dev}" "open_failed" \
+        "SMART ${dev} unreachable (${HOSTNAME_SHORT})" \
+        "Host: ${HOSTNAME_SHORT}
+Device: ${dev}
+smartctl could not open device: Resource temporarily unavailable
+This may indicate the drive has failed or been disconnected."
+    elif [[ "$status" == "ok" ]]; then
+      [[ -e "$dev" ]] || continue
+      found=1
+      smart_run_one "$dev" "$dtype"
+    fi
   done < <(smart_scan_devices)
   (( found == 0 )) && log "SMART: no devices discovered."
 }
